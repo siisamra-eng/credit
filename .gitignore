@@ -5,6 +5,7 @@ node_modules
 .DS_Store
 
 /.cache
+/.vercel
 /build
 /app/build
 /public/build/
