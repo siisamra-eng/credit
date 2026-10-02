@@ -18,6 +18,13 @@ type EarningRule =
   | {
       id: string;
       name: string;
+      kind: "first-order";
+      active: boolean;
+      cashbackRate: number;
+    }
+  | {
+      id: string;
+      name: string;
       kind: "tiers";
       active: boolean;
       firstThreshold: number;
@@ -36,6 +43,13 @@ type EarningRule =
     };
 
 const initialRules: EarningRule[] = [
+  {
+    id: "first-order",
+    name: "First order welcome",
+    kind: "first-order",
+    active: true,
+    cashbackRate: 10,
+  },
   {
     id: "order-tiers",
     name: "Stacked order cashback",
@@ -99,8 +113,11 @@ export default function Preview() {
   const [rules, setRules] = useState(initialRules);
   const [showRule, setShowRule] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [ruleKind, setRuleKind] = useState<"tiers" | "tag-delay">("tiers");
+  const [ruleKind, setRuleKind] = useState<
+    "first-order" | "tiers" | "tag-delay"
+  >("first-order");
   const [ruleName, setRuleName] = useState("");
+  const [firstOrderRate, setFirstOrderRate] = useState("10");
   const [firstThreshold, setFirstThreshold] = useState("200");
   const [firstRate, setFirstRate] = useState("15");
   const [secondThreshold, setSecondThreshold] = useState("500");
@@ -141,9 +158,11 @@ export default function Preview() {
 
   const openRuleEditor = (rule?: EarningRule) => {
     setEditingRuleId(rule?.id ?? null);
-    setRuleKind(rule?.kind ?? "tiers");
-    setRuleName(rule?.name ?? "New earning rule");
-    if (rule?.kind === "tiers") {
+    setRuleKind(rule?.kind ?? "first-order");
+    setRuleName(rule?.name ?? "New automation");
+    if (rule?.kind === "first-order") {
+      setFirstOrderRate(String(rule.cashbackRate));
+    } else if (rule?.kind === "tiers") {
       setFirstThreshold(String(rule.firstThreshold));
       setFirstRate(String(rule.firstRate));
       setSecondThreshold(String(rule.secondThreshold));
@@ -153,6 +172,7 @@ export default function Preview() {
       setDelayDays(String(rule?.delayDays ?? 30));
       setRewardAmount(String(rule?.rewardAmount ?? 25));
     } else {
+      setFirstOrderRate("10");
       setFirstThreshold("200");
       setFirstRate("15");
       setSecondThreshold("500");
@@ -166,16 +186,24 @@ export default function Preview() {
 
   const saveRule = () => {
     const id = editingRuleId ?? `demo-rule-${Date.now()}`;
-    const name = ruleName.trim() || "Custom earning rule";
+    const name = ruleName.trim() || "Custom automation";
+    const existingRule = rules.find((rule) => rule.id === editingRuleId);
+    const active = editingRuleId ? (existingRule?.active ?? true) : true;
     const updatedRule: EarningRule =
-      ruleKind === "tiers"
+      ruleKind === "first-order"
+        ? {
+            id,
+            name,
+            kind: "first-order",
+            active,
+            cashbackRate: Math.max(0, Number(firstOrderRate) || 0),
+          }
+        : ruleKind === "tiers"
         ? {
             id,
             name,
             kind: "tiers",
-            active: editingRuleId
-              ? (rules.find((rule) => rule.id === editingRuleId)?.active ?? true)
-              : true,
+            active,
             firstThreshold: Math.max(0, Number(firstThreshold) || 0),
             firstRate: Math.max(0, Number(firstRate) || 0),
             secondThreshold: Math.max(0, Number(secondThreshold) || 0),
@@ -185,9 +213,7 @@ export default function Preview() {
             id,
             name,
             kind: "tag-delay",
-            active: editingRuleId
-              ? (rules.find((rule) => rule.id === editingRuleId)?.active ?? true)
-              : true,
+            active,
             tag: ruleTag.trim() || "CUSTOMER-TAG",
             delayDays: Math.max(1, Number(delayDays) || 1),
             rewardAmount: Math.max(0, Number(rewardAmount) || 0),
@@ -201,7 +227,7 @@ export default function Preview() {
         : [...currentRules, updatedRule],
     );
     setShowRule(false);
-    notify("Demo earning rule saved");
+    notify("Demo automation saved");
   };
 
   const toggleRule = (ruleId: string) => {
@@ -424,7 +450,7 @@ export default function Preview() {
               <div className={styles.panelHeader}>
                 <div>
                   <div className={styles.eyebrow}>AUTOMATION</div>
-                  <h2>Earning rules</h2>
+                  <h2>Automations</h2>
                 </div>
                 <span className={styles.liveBadge}>
                   <i /> {rules.filter((rule) => rule.active).length} ACTIVE
@@ -434,11 +460,17 @@ export default function Preview() {
                 {rules.map((rule) => (
                   <article className={styles.ruleCard} key={rule.id}>
                     <div className={styles.ruleIcon}>
-                      {rule.kind === "tiers" ? "↗" : "♧"}
+                      {rule.kind === "first-order"
+                        ? "1"
+                        : rule.kind === "tiers"
+                          ? "↗"
+                          : "♧"}
                     </div>
                     <div className={styles.ruleInfo}>
                       <b>{rule.name}</b>
-                      {rule.kind === "tiers" ? (
+                      {rule.kind === "first-order" ? (
+                        <span>First-ever paid order · {rule.cashbackRate}% cashback</span>
+                      ) : rule.kind === "tiers" ? (
                         <span>
                           Over {money(rule.firstThreshold)}: {rule.firstRate}% +
                           over {money(rule.secondThreshold)}: {rule.secondRate}%
@@ -470,6 +502,32 @@ export default function Preview() {
                     >
                       <i />
                     </button>
+                    <div className={styles.ruleFlow}>
+                      <span>
+                        <small>TRIGGER</small>
+                        {rule.kind === "tag-delay" ? "Tag applied" : "Order paid"}
+                      </span>
+                      <b aria-hidden="true">→</b>
+                      <span>
+                        <small>
+                          {rule.kind === "tag-delay" ? "WAIT + CHECK" : "CONDITION"}
+                        </small>
+                        {rule.kind === "first-order"
+                          ? "First ever order"
+                          : rule.kind === "tiers"
+                            ? `Over ${money(rule.firstThreshold)} / ${money(rule.secondThreshold)}`
+                            : `${rule.delayDays} days · tag still present`}
+                      </span>
+                      <b aria-hidden="true">→</b>
+                      <span>
+                        <small>ACTION</small>
+                        {rule.kind === "first-order"
+                          ? `${rule.cashbackRate}% cashback`
+                          : rule.kind === "tiers"
+                            ? `${rule.firstRate}% + ${rule.secondRate}% credit`
+                            : `Award ${money(rule.rewardAmount)}`}
+                      </span>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -488,7 +546,7 @@ export default function Preview() {
                   className={styles.textButton}
                   onClick={() => openRuleEditor()}
                 >
-                  + New earning rule
+                  + Create automation
                 </button>
               </div>
             </section>
@@ -642,8 +700,8 @@ export default function Preview() {
               {showGift
                 ? "Award store credit"
                 : editingRuleId
-                  ? "Edit earning rule"
-                  : "Create earning rule"}
+                  ? "Edit automation"
+                  : "Create automation"}
             </h2>
             <p>
               {showGift
@@ -695,14 +753,41 @@ export default function Preview() {
                   <select
                     value={ruleKind}
                     onChange={(e) =>
-                      setRuleKind(e.target.value as "tiers" | "tag-delay")
+                      setRuleKind(
+                        e.target.value as "first-order" | "tiers" | "tag-delay",
+                      )
                     }
                   >
+                    <option value="first-order">First order only</option>
                     <option value="tiers">Stacked order thresholds</option>
                     <option value="tag-delay">Tag retained after a delay</option>
                   </select>
                 </label>
-                {ruleKind === "tiers" ? (
+                {ruleKind === "first-order" ? (
+                  <>
+                    <div className={styles.modalFlow}>
+                      <span>Order paid</span>
+                      <b aria-hidden="true">→</b>
+                      <span>First-ever order only</span>
+                      <b aria-hidden="true">→</b>
+                      <span>Issue cashback</span>
+                    </div>
+                    <label>
+                      Cashback percentage
+                      <div className={styles.rateInput}>
+                        <input
+                          type="number"
+                          min="0.01"
+                          max="100"
+                          step="0.01"
+                          value={firstOrderRate}
+                          onChange={(e) => setFirstOrderRate(e.target.value)}
+                        />
+                        <span>%</span>
+                      </div>
+                    </label>
+                  </>
+                ) : ruleKind === "tiers" ? (
                   <>
                     <div className={styles.tierInputs}>
                       <label>
@@ -812,7 +897,7 @@ export default function Preview() {
                   Demo only: saving changes this preview, not Shopify.
                 </small>
                 <button className={styles.primaryButton} onClick={saveRule}>
-                  Save demo rule
+                  Save demo automation
                 </button>
               </>
             )}

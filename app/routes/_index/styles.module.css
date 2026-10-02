@@ -473,7 +473,8 @@
   border: 1px solid #eeefeb;
   background: #fcfcfa;
   border-radius: 5px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr) auto auto;
   align-items: center;
   padding: 12px;
   gap: 10px;
@@ -485,7 +486,6 @@
   margin-top: 17px;
 }
 .ruleIcon {
-  flex: 0 0 31px;
   width: 31px;
   height: 31px;
   border-radius: 5px;
@@ -499,7 +499,6 @@
   display: grid;
   gap: 4px;
   min-width: 0;
-  flex: 1;
 }
 .ruleInfo b {
   font-size: 11px;
@@ -519,6 +518,34 @@
   color: #666861;
   font: 600 9px Inter, sans-serif;
   cursor: pointer;
+}
+.ruleFlow {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid #eeefeb;
+  padding-top: 9px;
+  color: #41433c;
+  font-size: 8px;
+  line-height: 1.35;
+}
+.ruleFlow span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ruleFlow span small {
+  display: block;
+  margin-bottom: 3px;
+  color: #969890;
+  font: 6px "Chivo Mono", monospace;
+  letter-spacing: 0.06em;
+}
+.ruleFlow > b {
+  color: #b2a56f;
+  font-size: 10px;
+  font-weight: 400;
 }
 .ruleStackNote {
   margin-top: 11px;
@@ -914,6 +941,25 @@
   color: #888;
   margin: 0 0 13px;
   display: block;
+}
+.modalFlow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #efeee8;
+  background: #faf9f4;
+  border-radius: 4px;
+  padding: 10px;
+  color: #666;
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: center;
+}
+.modalFlow b {
+  color: #b2a56f;
+  font-size: 10px;
+  font-weight: 400;
 }
 .modal > .primaryButton {
   width: 100%;
