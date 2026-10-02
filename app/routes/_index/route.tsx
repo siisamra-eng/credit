@@ -148,7 +148,7 @@ export default function Preview() {
           </div>
           <div className={styles.topRight}>
             <span className={styles.shopifyPill}>
-              <i /> SHOPIFY CONNECTED
+              <i /> DEMO MODE
             </span>
             <button className={styles.iconButton} aria-label="Notifications">
               ♧<i />
@@ -160,8 +160,8 @@ export default function Preview() {
           <div className={styles.demoBanner}>
             <span className={styles.demoDot} />
             <span>
-              <b>Preview mode</b> &nbsp;Sample data is shown here. Connect your
-              Shopify store to activate live balances.
+              <b>Preview mode</b> &nbsp;Sample data only. No Shopify store is
+              connected and no real credit is issued.
             </span>
             <a
               href="https://shopify.dev/docs/apps/build/cli-for-apps"
