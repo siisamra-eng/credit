@@ -14,60 +14,41 @@ type Entry = {
   initials: string;
 };
 
-type EarningRule =
-  | {
-      id: string;
-      name: string;
-      kind: "first-order";
-      active: boolean;
-      cashbackRate: number;
-    }
-  | {
-      id: string;
-      name: string;
-      kind: "tiers";
-      active: boolean;
-      firstThreshold: number;
-      firstRate: number;
-      secondThreshold: number;
-      secondRate: number;
-    }
-  | {
-      id: string;
-      name: string;
-      kind: "tag-delay";
-      active: boolean;
-      tag: string;
-      delayDays: number;
-      rewardAmount: number;
-    };
+type Trigger = "order_paid" | "order_created" | "customer_tag_added" | "subscription_renewed" | "customer_created";
+type Condition = { id: string; field: string; operator: string; value: string };
+type Reward = { id: string; kind: "cashback" | "fixed_credit" | "multiplier"; value: string };
+type EarningRule = { id: string; name: string; active: boolean; trigger: Trigger; match: "all" | "any"; conditions: Condition[]; delayDays: string; recheck: boolean; stackRewards: boolean; rewards: Reward[] };
+
+const triggerLabels: Record<Trigger, string> = {
+  order_paid: "Order paid", order_created: "Order created", customer_tag_added: "Customer tag added",
+  subscription_renewed: "Subscription renewed", customer_created: "Customer created",
+};
+const fieldLabels: Record<string, string> = {
+  order_count: "Order count", order_subtotal: "Order subtotal", customer_tag: "Customer tag",
+  customer_tenure: "Customer tenure (days)", subscription_status: "Subscription status", first_order: "First order",
+};
+const rewardLabels: Record<Reward["kind"], string> = { cashback: "Cashback %", fixed_credit: "Fixed credit €", multiplier: "Credit multiplier ×" };
+const condition = (field: string, operator: string, value: string): Condition => ({ id: `condition-${Math.random().toString(36).slice(2, 9)}`, field, operator, value });
+const reward = (kind: Reward["kind"], value: string): Reward => ({ id: `reward-${Math.random().toString(36).slice(2, 9)}`, kind, value });
 
 const initialRules: EarningRule[] = [
   {
     id: "first-order",
     name: "First order welcome",
-    kind: "first-order",
     active: true,
-    cashbackRate: 10,
+    trigger: "order_paid", match: "all", conditions: [condition("first_order", "is", "true")], delayDays: "0", recheck: false, stackRewards: false, rewards: [reward("cashback", "10")],
   },
   {
     id: "order-tiers",
     name: "Stacked order cashback",
-    kind: "tiers",
     active: true,
-    firstThreshold: 200,
-    firstRate: 15,
-    secondThreshold: 500,
-    secondRate: 20,
+    trigger: "order_paid", match: "all", conditions: [condition("order_subtotal", "greater_than", "200"), condition("order_subtotal", "greater_than", "500")], delayDays: "0", recheck: false, stackRewards: true, rewards: [reward("cashback", "15"), reward("cashback", "20")],
   },
   {
     id: "tag-loyalty",
     name: "Long-term subscriber reward",
-    kind: "tag-delay",
     active: true,
-    tag: "LONG-TERM-SUBSCRIBER",
-    delayDays: 30,
-    rewardAmount: 25,
+    trigger: "customer_tag_added", match: "all", conditions: [condition("customer_tag", "contains", "LONG-TERM-SUBSCRIBER")], delayDays: "30", recheck: true, stackRewards: false, rewards: [reward("fixed_credit", "25")],
   },
 ];
 
@@ -113,18 +94,11 @@ export default function Preview() {
   const [rules, setRules] = useState(initialRules);
   const [showRule, setShowRule] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [ruleKind, setRuleKind] = useState<
-    "first-order" | "tiers" | "tag-delay"
-  >("first-order");
-  const [ruleName, setRuleName] = useState("");
-  const [firstOrderRate, setFirstOrderRate] = useState("10");
-  const [firstThreshold, setFirstThreshold] = useState("200");
-  const [firstRate, setFirstRate] = useState("15");
-  const [secondThreshold, setSecondThreshold] = useState("500");
-  const [secondRate, setSecondRate] = useState("20");
-  const [ruleTag, setRuleTag] = useState("LONG-TERM-SUBSCRIBER");
-  const [delayDays, setDelayDays] = useState("30");
-  const [rewardAmount, setRewardAmount] = useState("25");
+  const [builder, setBuilder] = useState<Omit<EarningRule, "id" | "active">>({
+    name: "New automation", trigger: "order_paid", match: "all",
+    conditions: [condition("first_order", "is", "true")], delayDays: "0", recheck: false,
+    stackRewards: false, rewards: [reward("cashback", "10")],
+  });
   const [showGift, setShowGift] = useState(false);
   const [giftAmount, setGiftAmount] = useState("25");
   const [customer, setCustomer] = useState("Maya Chen");
@@ -158,66 +132,24 @@ export default function Preview() {
 
   const openRuleEditor = (rule?: EarningRule) => {
     setEditingRuleId(rule?.id ?? null);
-    setRuleKind(rule?.kind ?? "first-order");
-    setRuleName(rule?.name ?? "New automation");
-    if (rule?.kind === "first-order") {
-      setFirstOrderRate(String(rule.cashbackRate));
-    } else if (rule?.kind === "tiers") {
-      setFirstThreshold(String(rule.firstThreshold));
-      setFirstRate(String(rule.firstRate));
-      setSecondThreshold(String(rule.secondThreshold));
-      setSecondRate(String(rule.secondRate));
-    } else if (rule?.kind === "tag-delay") {
-      setRuleTag(rule?.tag ?? "LONG-TERM-SUBSCRIBER");
-      setDelayDays(String(rule?.delayDays ?? 30));
-      setRewardAmount(String(rule?.rewardAmount ?? 25));
-    } else {
-      setFirstOrderRate("10");
-      setFirstThreshold("200");
-      setFirstRate("15");
-      setSecondThreshold("500");
-      setSecondRate("20");
-      setRuleTag("LONG-TERM-SUBSCRIBER");
-      setDelayDays("30");
-      setRewardAmount("25");
-    }
+    const draft = rule ? {
+      name: rule.name, trigger: rule.trigger, match: rule.match, conditions: rule.conditions,
+      delayDays: rule.delayDays, recheck: rule.recheck, stackRewards: rule.stackRewards, rewards: rule.rewards,
+    } : {
+      name: "New automation", trigger: "order_paid" as Trigger, match: "all" as const,
+      conditions: [condition("first_order", "is", "true")], delayDays: "0", recheck: false,
+      stackRewards: false, rewards: [reward("cashback", "10")],
+    };
+    setBuilder({ ...draft, conditions: draft.conditions.map((item) => ({ ...item })), rewards: draft.rewards.map((item) => ({ ...item })) });
     setShowRule(true);
   };
 
   const saveRule = () => {
     const id = editingRuleId ?? `demo-rule-${Date.now()}`;
-    const name = ruleName.trim() || "Custom automation";
+    const name = builder.name.trim() || "Custom automation";
     const existingRule = rules.find((rule) => rule.id === editingRuleId);
     const active = editingRuleId ? (existingRule?.active ?? true) : true;
-    const updatedRule: EarningRule =
-      ruleKind === "first-order"
-        ? {
-            id,
-            name,
-            kind: "first-order",
-            active,
-            cashbackRate: Math.max(0, Number(firstOrderRate) || 0),
-          }
-        : ruleKind === "tiers"
-        ? {
-            id,
-            name,
-            kind: "tiers",
-            active,
-            firstThreshold: Math.max(0, Number(firstThreshold) || 0),
-            firstRate: Math.max(0, Number(firstRate) || 0),
-            secondThreshold: Math.max(0, Number(secondThreshold) || 0),
-            secondRate: Math.max(0, Number(secondRate) || 0),
-          }
-        : {
-            id,
-            name,
-            kind: "tag-delay",
-            active,
-            tag: ruleTag.trim() || "CUSTOMER-TAG",
-            delayDays: Math.max(1, Number(delayDays) || 1),
-            rewardAmount: Math.max(0, Number(rewardAmount) || 0),
-          };
+    const updatedRule: EarningRule = { ...builder, id, name, active };
 
     setRules((currentRules) =>
       editingRuleId
@@ -238,14 +170,9 @@ export default function Preview() {
     );
   };
 
-  const tierRule = rules.find(
-    (rule): rule is Extract<EarningRule, { kind: "tiers" }> =>
-      rule.kind === "tiers" && rule.active,
-  );
+  const tierRule = rules.find((rule) => rule.stackRewards && rule.active);
   const stackedReward = tierRule
-    ? ((550 > tierRule.firstThreshold ? tierRule.firstRate : 0) +
-        (550 > tierRule.secondThreshold ? tierRule.secondRate : 0)) /
-      100
+    ? tierRule.rewards.reduce((sum, item) => sum + (item.kind === "cashback" && 550 > Number(tierRule.conditions.find((entry) => entry.field === "order_subtotal")?.value ?? 0) ? Number(item.value) / 100 : 0), 0)
     : 0;
 
   return (
@@ -460,28 +387,11 @@ export default function Preview() {
                 {rules.map((rule) => (
                   <article className={styles.ruleCard} key={rule.id}>
                     <div className={styles.ruleIcon}>
-                      {rule.kind === "first-order"
-                        ? "1"
-                        : rule.kind === "tiers"
-                          ? "↗"
-                          : "♧"}
+                      {rule.trigger === "customer_tag_added" ? "♧" : rule.trigger === "subscription_renewed" ? "↻" : "↗"}
                     </div>
                     <div className={styles.ruleInfo}>
                       <b>{rule.name}</b>
-                      {rule.kind === "first-order" ? (
-                        <span>First-ever paid order · {rule.cashbackRate}% cashback</span>
-                      ) : rule.kind === "tiers" ? (
-                        <span>
-                          Over {money(rule.firstThreshold)}: {rule.firstRate}% +
-                          over {money(rule.secondThreshold)}: {rule.secondRate}%
-                          {" · Stacks"}
-                        </span>
-                      ) : (
-                        <span>
-                          Keep tag “{rule.tag}” for {rule.delayDays} days →{" "}
-                          {money(rule.rewardAmount)} credit
-                        </span>
-                      )}
+                      <span>{triggerLabels[rule.trigger]} · {rule.conditions.length} condition{rule.conditions.length === 1 ? "" : "s"} · {rule.rewards.length} reward{rule.rewards.length === 1 ? "" : "s"}{rule.stackRewards ? " · Stacked" : ""}</span>
                     </div>
                     <button
                       type="button"
@@ -505,27 +415,19 @@ export default function Preview() {
                     <div className={styles.ruleFlow}>
                       <span>
                         <small>TRIGGER</small>
-                        {rule.kind === "tag-delay" ? "Tag applied" : "Order paid"}
+                        {triggerLabels[rule.trigger]}
                       </span>
                       <b aria-hidden="true">→</b>
                       <span>
                         <small>
-                          {rule.kind === "tag-delay" ? "WAIT + CHECK" : "CONDITION"}
+                          {rule.delayDays !== "0" ? "WAIT + RECHECK" : "CONDITIONS"}
                         </small>
-                        {rule.kind === "first-order"
-                          ? "First ever order"
-                          : rule.kind === "tiers"
-                            ? `Over ${money(rule.firstThreshold)} / ${money(rule.secondThreshold)}`
-                            : `${rule.delayDays} days · tag still present`}
+                        {rule.conditions.map((item) => `${fieldLabels[item.field] ?? item.field} ${item.operator.replaceAll("_", " ")} ${item.value}`).join(rule.match === "all" ? " · AND · " : " · OR · ") || "No conditions"}{rule.delayDays !== "0" ? ` · ${rule.delayDays}d delay${rule.recheck ? " + recheck" : ""}` : ""}
                       </span>
                       <b aria-hidden="true">→</b>
                       <span>
                         <small>ACTION</small>
-                        {rule.kind === "first-order"
-                          ? `${rule.cashbackRate}% cashback`
-                          : rule.kind === "tiers"
-                            ? `${rule.firstRate}% + ${rule.secondRate}% credit`
-                            : `Award ${money(rule.rewardAmount)}`}
+                        {rule.rewards.map((item) => `${item.value}${item.kind === "cashback" ? "% cashback" : item.kind === "fixed_credit" ? "€ credit" : "× multiplier"}`).join(rule.stackRewards ? " + " : " / ") || "No rewards"}
                       </span>
                     </div>
                   </article>
@@ -677,7 +579,7 @@ export default function Preview() {
             }}
           />
           <section
-            className={styles.modal}
+            className={`${styles.modal} ${showRule ? styles.modalWide : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="credit-modal-title"
@@ -706,7 +608,7 @@ export default function Preview() {
             <p>
               {showGift
                 ? "Add a little extra to a customer’s next order."
-                : "Build a mock rule using order thresholds or customer tags."}
+                : "Combine triggers, conditions, delays, and reward actions into a workflow."}
             </p>
             {showGift ? (
               <>
@@ -740,165 +642,40 @@ export default function Preview() {
               </>
             ) : (
               <>
-                <label>
-                  Rule name
-                  <input
-                    value={ruleName}
-                    onChange={(e) => setRuleName(e.target.value)}
-                    maxLength={80}
-                  />
-                </label>
-                <label>
-                  Rule type
-                  <select
-                    value={ruleKind}
-                    onChange={(e) =>
-                      setRuleKind(
-                        e.target.value as "first-order" | "tiers" | "tag-delay",
-                      )
-                    }
-                  >
-                    <option value="first-order">First order only</option>
-                    <option value="tiers">Stacked order thresholds</option>
-                    <option value="tag-delay">Tag retained after a delay</option>
-                  </select>
-                </label>
-                {ruleKind === "first-order" ? (
-                  <>
-                    <div className={styles.modalFlow}>
-                      <span>Order paid</span>
-                      <b aria-hidden="true">→</b>
-                      <span>First-ever order only</span>
-                      <b aria-hidden="true">→</b>
-                      <span>Issue cashback</span>
-                    </div>
-                    <label>
-                      Cashback percentage
-                      <div className={styles.rateInput}>
-                        <input
-                          type="number"
-                          min="0.01"
-                          max="100"
-                          step="0.01"
-                          value={firstOrderRate}
-                          onChange={(e) => setFirstOrderRate(e.target.value)}
-                        />
-                        <span>%</span>
-                      </div>
-                    </label>
-                  </>
-                ) : ruleKind === "tiers" ? (
-                  <>
-                    <div className={styles.tierInputs}>
-                      <label>
-                        Spend over
-                        <div className={styles.rateInput}>
-                          <input
-                            type="number"
-                            min="1"
-                            value={firstThreshold}
-                            onChange={(e) => setFirstThreshold(e.target.value)}
-                          />
-                          <span>€</span>
-                        </div>
-                      </label>
-                      <label>
-                        Cashback
-                        <div className={styles.rateInput}>
-                          <input
-                            type="number"
-                            min="0.01"
-                            max="100"
-                            step="0.01"
-                            value={firstRate}
-                            onChange={(e) => setFirstRate(e.target.value)}
-                          />
-                          <span>%</span>
-                        </div>
-                      </label>
-                      <label>
-                        Spend over
-                        <div className={styles.rateInput}>
-                          <input
-                            type="number"
-                            min="1"
-                            value={secondThreshold}
-                            onChange={(e) => setSecondThreshold(e.target.value)}
-                          />
-                          <span>€</span>
-                        </div>
-                      </label>
-                      <label>
-                        Cashback
-                        <div className={styles.rateInput}>
-                          <input
-                            type="number"
-                            min="0.01"
-                            max="100"
-                            step="0.01"
-                            value={secondRate}
-                            onChange={(e) => setSecondRate(e.target.value)}
-                          />
-                          <span>%</span>
-                        </div>
-                      </label>
-                    </div>
-                    <div className={styles.modalExample}>
-                      <b>Stacking is on</b>
-                      <span>
-                        An order over {money(Number(secondThreshold) || 0)} earns{" "}
-                        {(Number(firstRate) || 0) + (Number(secondRate) || 0)}%
-                        {" "}combined cashback.
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <label>
-                      Shopify customer tag
-                      <input
-                        value={ruleTag}
-                        onChange={(e) => setRuleTag(e.target.value)}
-                        maxLength={255}
-                        placeholder="LONG-TERM-SUBSCRIBER"
-                      />
-                    </label>
-                    <div className={styles.tierInputs}>
-                      <label>
-                        Wait days
-                        <input
-                          type="number"
-                          min="1"
-                          value={delayDays}
-                          onChange={(e) => setDelayDays(e.target.value)}
-                        />
-                      </label>
-                      <label>
-                        Store credit (€)
-                        <input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={rewardAmount}
-                          onChange={(e) => setRewardAmount(e.target.value)}
-                        />
-                      </label>
-                    </div>
-                    <div className={styles.modalExample}>
-                      <b>Tag check before reward</b>
-                      <span>
-                        After {delayDays || "0"} days, confirm “{ruleTag || "tag"}”
-                        {" "}is still present, then award {money(Number(rewardAmount) || 0)}.
-                      </span>
-                    </div>
-                  </>
-                )}
-                <small className={styles.modalHint}>
-                  Demo only: saving changes this preview, not Shopify.
-                </small>
-                <button className={styles.primaryButton} onClick={saveRule}>
-                  Save demo automation
-                </button>
+                <label>Automation name<input value={builder.name} onChange={(e) => setBuilder({ ...builder, name: e.target.value })} maxLength={80} /></label>
+                <div className={styles.builderBlock}>
+                  <div className={styles.builderHeading}><span className={styles.builderStep}>1</span><div><b>When this happens</b><small>Choose the event that starts the automation.</small></div></div>
+                  <label>Trigger<select value={builder.trigger} onChange={(e) => setBuilder({ ...builder, trigger: e.target.value as Trigger })}>{Object.entries(triggerLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                </div>
+                <div className={styles.builderBlock}>
+                  <div className={styles.builderHeading}><span className={styles.builderStep}>2</span><div><b>Check these conditions</b><small>Continue when {builder.match === "all" ? "all" : "any"} conditions match.</small></div></div>
+                  <label>Condition logic<select value={builder.match} onChange={(e) => setBuilder({ ...builder, match: e.target.value as "all" | "any" })}><option value="all">All conditions (AND)</option><option value="any">Any condition (OR)</option></select></label>
+                  <div className={styles.builderRows}>{builder.conditions.map((item, index) => <div className={styles.builderRow} key={item.id}>
+                    {index > 0 && <span className={styles.logicJoin}>{builder.match === "all" ? "AND" : "OR"}</span>}
+                    <select aria-label="Condition field" value={item.field} onChange={(e) => setBuilder({ ...builder, conditions: builder.conditions.map((row) => row.id === item.id ? { ...row, field: e.target.value, operator: e.target.value === "customer_tag" ? "contains" : e.target.value === "first_order" ? "is" : "greater_than" } : row) })}>{Object.entries(fieldLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+                    <select aria-label="Condition operator" value={item.operator} onChange={(e) => setBuilder({ ...builder, conditions: builder.conditions.map((row) => row.id === item.id ? { ...row, operator: e.target.value } : row) })}><option value="greater_than">is greater than</option><option value="less_than">is less than</option><option value="equals">equals</option><option value="contains">contains</option><option value="is">is</option></select>
+                    <input aria-label="Condition value" value={item.value} onChange={(e) => setBuilder({ ...builder, conditions: builder.conditions.map((row) => row.id === item.id ? { ...row, value: e.target.value } : row) })} placeholder="Value" />
+                    <button type="button" className={styles.removeStep} aria-label="Remove condition" disabled={builder.conditions.length === 1} onClick={() => setBuilder({ ...builder, conditions: builder.conditions.filter((row) => row.id !== item.id) })}>×</button>
+                  </div>)}</div>
+                  <button type="button" className={styles.addStep} onClick={() => setBuilder({ ...builder, conditions: [...builder.conditions, condition("order_subtotal", "greater_than", "100")] })}>＋ Add condition</button>
+                </div>
+                <div className={styles.builderBlock}>
+                  <div className={styles.builderHeading}><span className={styles.builderStep}>3</span><div><b>Wait, then check again</b><small>Optional delay for tag and lifecycle automations.</small></div></div>
+                  <div className={styles.builderInline}><label>Delay<input type="number" min="0" value={builder.delayDays} onChange={(e) => setBuilder({ ...builder, delayDays: e.target.value })} /></label><span>days</span><label className={styles.checkLabel}><input type="checkbox" checked={builder.recheck} onChange={(e) => setBuilder({ ...builder, recheck: e.target.checked })} /> Recheck conditions before rewarding</label></div>
+                </div>
+                <div className={styles.builderBlock}>
+                  <div className={styles.builderHeading}><span className={styles.builderStep}>4</span><div><b>Then issue these rewards</b><small>Add multiple actions and decide whether they stack.</small></div></div>
+                  <div className={styles.builderRows}>{builder.rewards.map((item) => <div className={styles.builderRow} key={item.id}>
+                    <select aria-label="Reward type" value={item.kind} onChange={(e) => setBuilder({ ...builder, rewards: builder.rewards.map((row) => row.id === item.id ? { ...row, kind: e.target.value as Reward["kind"] } : row) })}>{Object.entries(rewardLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+                    <input aria-label="Reward amount" type="number" min="0" step="0.1" value={item.value} onChange={(e) => setBuilder({ ...builder, rewards: builder.rewards.map((row) => row.id === item.id ? { ...row, value: e.target.value } : row) })} />
+                    <button type="button" className={styles.removeStep} aria-label="Remove reward" disabled={builder.rewards.length === 1} onClick={() => setBuilder({ ...builder, rewards: builder.rewards.filter((row) => row.id !== item.id) })}>×</button>
+                  </div>)}</div>
+                  <button type="button" className={styles.addStep} onClick={() => setBuilder({ ...builder, rewards: [...builder.rewards, reward("cashback", "5")] })}>＋ Add reward action</button>
+                  <div className={styles.stackControl}><input aria-label="Stack matching rewards" type="checkbox" checked={builder.stackRewards} onChange={(e) => setBuilder({ ...builder, stackRewards: e.target.checked })} /><span><b>Stack matching rewards</b><small>{builder.stackRewards ? "Every matching reward action is combined." : "Only the single highest-value matching reward applies."}</small></span></div>
+                </div>
+                <div className={styles.builderPreview}><span className={styles.eyebrow}>LIVE FLOW PREVIEW · MOCK DATA</span><div><b>WHEN</b> {triggerLabels[builder.trigger]}</div><div><b>IF</b> {builder.conditions.map((item) => `${fieldLabels[item.field] ?? item.field} ${item.operator.replaceAll("_", " ")} ${item.value}`).join(builder.match === "all" ? " AND " : " OR ") || "no conditions"}</div>{Number(builder.delayDays) > 0 && <div><b>WAIT</b> {builder.delayDays} days{builder.recheck ? " · recheck conditions" : ""}</div>}<div><b>THEN</b> {builder.rewards.map((item) => `${item.value}${item.kind === "cashback" ? "% cashback" : item.kind === "fixed_credit" ? "€ credit" : "× multiplier"}`).join(builder.stackRewards ? " + " : " / ")}{builder.stackRewards ? " · stack" : " · best match"}</div></div>
+                <small className={styles.modalHint}>Demo only: saving updates this preview, not Shopify. No real credit is issued.</small>
+                <button className={styles.primaryButton} onClick={saveRule}>Save demo automation</button>
               </>
             )}
           </section>
