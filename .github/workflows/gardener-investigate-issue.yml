@@ -205,7 +205,7 @@ jobs:
       - name: Investigate issue
         id: investigate
         timeout-minutes: 30
-        uses: anthropics/claude-code-action@b47fd721da662d48c5680e154ad16a73ed74d2e0 # v1
+        uses: anthropics/claude-code-action@fd1c128679612beff4ca259c78021c506e8aa7a7 # v1
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
         with:
