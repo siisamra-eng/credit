@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type {
   ActionFunctionArgs,
   HeadersFunction,
@@ -188,13 +188,6 @@ export default function Index() {
   const actionData = useActionData<typeof action>();
   const [activationApproved, setActivationApproved] = useState(false);
   const [adjustmentApproved, setAdjustmentApproved] = useState(false);
-  useEffect(() => {
-    if (actionData) {
-      setActivationApproved(false);
-      setAdjustmentApproved(false);
-    }
-  }, [actionData]);
-
   return (
     <s-page heading="Carbinox Credit">
       <s-section heading="Store overview">
@@ -256,8 +249,11 @@ export default function Index() {
                 !window.confirm(
                   "Activate automatic cashback for future matching paid orders? This will issue real Shopify store credit.",
                 )
-              )
+              ) {
                 event.preventDefault();
+                return;
+              }
+              setActivationApproved(false);
             }}
           >
             <s-stack direction="inline" gap="base" alignItems="end">
@@ -366,8 +362,11 @@ export default function Index() {
                 !window.confirm(
                   `Confirm ${direction} of ${amount} ${currency} for Shopify customer ${customer}?\n\nReason: ${reason}\n\nThis changes the customer’s real Shopify store-credit balance.`,
                 )
-              )
+              ) {
                 event.preventDefault();
+                return;
+              }
+              setAdjustmentApproved(false);
             }}
           >
             <input type="hidden" name="intent" value="adjust_credit" />

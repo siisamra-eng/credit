@@ -448,19 +448,26 @@ export default function Preview() {
         </div>
       )}
       {(showGift || showRule) && (
-        <div
-          className={styles.modalBackdrop}
-          onClick={() => {
-            setShowGift(false);
-            setShowRule(false);
-          }}
-        >
+        <div className={styles.modalBackdrop}>
+          <button
+            type="button"
+            className={styles.modalScrim}
+            aria-label="Close dialog"
+            onClick={() => {
+              setShowGift(false);
+              setShowRule(false);
+            }}
+          />
           <section
             className={styles.modal}
-            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="credit-modal-title"
           >
             <button
+              type="button"
               className={styles.modalClose}
+              aria-label="Close dialog"
               onClick={() => {
                 setShowGift(false);
                 setShowRule(false);
@@ -471,7 +478,9 @@ export default function Preview() {
             <div className={styles.eyebrow}>
               {showGift ? "A PERSONAL THANK YOU" : "AUTOMATED REWARD"}
             </div>
-            <h2>{showGift ? "Award store credit" : "Edit cashback rule"}</h2>
+            <h2 id="credit-modal-title">
+              {showGift ? "Award store credit" : "Edit cashback rule"}
+            </h2>
             <p>
               {showGift
                 ? "Add a little extra to a customer’s next order."
